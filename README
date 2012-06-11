@@ -1,0 +1,6 @@
+The pin configs are relatively straight forward, it's 
+currently hardcoded to /dev/ttyACM0. 
+
+Depends on perl supporting:
+
+Device::SerialPort, Time::HiRes, POSIX
