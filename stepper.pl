@@ -4,39 +4,57 @@ use Device::SerialPort;
 use Time::HiRes qw(usleep nanosleep);
 use POSIX;
 
+my $serialport = "/dev/ttyACM0";
+
 my %motors = (
    pan => {
-      step 	=> [ "C","1" ],
-      direction => [ "E","7" ],
-      ms1	=> [ "C","3" ],
-      ms2	=> [ "C","2" ],
-      stepsize	=> 1.8,
-      holdtime  => 7.5 * 1000,
+      # Wiring specific
+      pins	=> [ "step","direction","ms1","ms2" ],
+      step 	=> [ "C", "1", "out", "low" ],
+      direction => [ "E", "7", "out", "low" ],
+      ms1	=> [ "C", "3", "out", "low" ],
+      ms2	=> [ "C", "2", "out", "low" ],
       ccw	=> "low",
       cw	=> "high",
+      # Controller specific
+      holdtime  => 7.5 * 1000,
+      # Motor specific
+      stepsize	=> 1.8,
       canustep  => 0,
+      usteps	=> {
+        whole 	=> ["low","low"],
+	half  	=> ["high","low"],
+	quarter	=> ["low","high"],
+	eighth	=> ["high","high"],
+      },
    },
    tilt => {
-      step 	=> [ "D","5" ],
-      direction => [ "D","4" ],
-      ms1	=> [ "D","7" ],
-      ms2	=> [ "D","6" ],
-      stepsize	=> 1.8,
-      holdtime  => 7.5 * 1000,
+      # Wiring specific
+      pins	=> [ "step","direction","ms1","ms2" ],
+      step 	=> [ "D", "5", "out", "low" ],
+      direction => [ "D", "4", "out", "low" ],
+      ms1	=> [ "D", "7", "out", "low" ],
+      ms2	=> [ "D", "6", "out", "low" ],
       ccw	=> "low",
       cw	=> "high",
+      # Controller specific
+      holdtime  => 7.5 * 1000,
+      # Motor specific
+      stepsize	=> 1.8,
       canustep  => 0,
+      usteps	=> {
+        whole 	=> ["low","low"],
+	half  	=> ["high","low"],
+	quarter	=> ["low","high"],
+	eighth	=> ["high","high"],
+      },,
    },
 );
 
-my %pindefaults = (
-   step 	=> { dir => "out", value => "low" },
-   direction 	=> { dir => "out", value => "low" },
-   ms1 		=> { dir => "out", value => "low" },
-   ms2 		=> { dir => "out", value => "low" },
-);
 # Abandon all hope, ye who enter here
 #
+
+my $dbg = 1;
 
 my $port;
 my %pinconfigs;
@@ -67,10 +85,14 @@ sub configure_pin {
      printf("Skipping pin %s%s: Invalid direction was passed [%s] valid: {in,out}\n", $group, $pin, $dir);
   } elsif( validate_pin($group,$pin) ){  
   } else {
-     $port->write("$cmd\n");
-     $port->write_drain;
-     usleep(10*1000);
-     $result = $port->read(255);
+     if( !$dbg ) {
+       $port->write("$cmd\n");
+       $port->write_drain;
+       usleep(10*1000);
+       $result = $port->read(255);
+     } else {
+       $result = "OK";
+     }
      if( $result !~ /OK/ ) {
 	printf("Pin configuration failed: [%s][$cmd]\n", $result);
      } else {
@@ -96,10 +118,14 @@ sub set_pin {
   } elsif( $pinconfigs{"$group$pin"}{direction} ne "out" ) {
      printf("Skipping pin %s%s: Pin is set to input or no direction explicitly set\n", $group, $pin);
   } else {
-    $port->write("$cmd\n");
-    $port->write_drain;
-    usleep(7.5*1000);
-    $result = $port->read(255);
+    if(!$dbg){
+      $port->write("$cmd\n");
+      $port->write_drain;
+      usleep(7.5*1000);
+      $result = $port->read(255);
+    } else {
+      $result = "OK";
+    }
     if( $result !~ /OK/ ) {
        printf("Pin state failed: [%s]\n", $result);
     } else {
@@ -125,12 +151,12 @@ sub list_motors {
 
 sub configure_motor_pins {
   foreach $motor (keys(%motors)) {
-    foreach $function (keys(%pindefaults)) {
+    foreach $function (@{$motors{$motor}{pins}}) {
       
       my $group = $motors{$motor}{$function}[0];
       my $pin   = $motors{$motor}{$function}[1];
-      my $dir   = $pindefaults{$function}{dir};
-      my $value = $pindefaults{$function}{value};
+      my $dir   = $motors{$motor}{$function}[2];
+      my $value = $motors{$motor}{$function}[3];
 
       printf("Configuring: %s -> %s\n", $motor, $function);
       configure_pin($group, $pin, $dir);
@@ -175,12 +201,13 @@ sub step_motor {
   }
 }
 
-$port = Device::SerialPort->new("/dev/ttyACM0");
-$port->databits(8);
-$port->baudrate(9600);
-$port->parity("none");
-$port->stopbits(1);
-sleep 1;
+if(!$dbg) {
+  $port = Device::SerialPort->new("/dev/ttyACM0");
+  $port->databits(8);
+  $port->baudrate(9600);
+  $port->parity("none");
+  $port->stopbits(1);
+}
 
 #testing
 #exit(0)
