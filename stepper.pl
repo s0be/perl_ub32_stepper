@@ -3,7 +3,6 @@
 use strict;
 use Device::SerialPort;
 use Time::HiRes qw(usleep nanosleep);
-use POSIX;
 
 my $serialport = "/dev/ttyACM0";
 
@@ -184,7 +183,7 @@ sub step_motor {
   my @ms2cfg  = @{$motors{$motor}{ms2}};
 
   my $dir_bit = $motors{$motor}{$direction};
-  my $steps = ceil($angle / $motors{$motor}{stepsize});
+  my $steps = $angle / $motors{$motor}{stepsize};
   
   set_pin($dircfg[0], $dircfg[1], $dir_bit);
 
@@ -198,7 +197,7 @@ sub step_motor {
     }
   }
 
-  for(; $steps; $steps--) {
+  for(; $steps > 0; $steps--) {
     set_pin($stepcfg[0], $stepcfg[1], "high");
     usleep($motors{$motor}{holdtime});
     set_pin($stepcfg[0], $stepcfg[1], "low");
