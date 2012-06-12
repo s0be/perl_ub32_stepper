@@ -1,5 +1,6 @@
 #!/bin/perl
 
+use strict;
 use Device::SerialPort;
 use Time::HiRes qw(usleep nanosleep);
 use POSIX;
@@ -140,6 +141,7 @@ sub print_pin {
 }
 
 sub list_motors {
+  my $name;
   foreach $name (keys(%motors)) {
     printf("Motor: %s [ Step: %s, Direction: %s ]\n",
            $name, 
@@ -150,6 +152,8 @@ sub list_motors {
 }
 
 sub configure_motor_pins {
+  my $motor;
+  my $function;
   foreach $motor (keys(%motors)) {
     foreach $function (@{$motors{$motor}{pins}}) {
       
