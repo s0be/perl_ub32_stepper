@@ -9,52 +9,56 @@ my $serialport = "/dev/ttyACM0";
 my %motors = (
    pan => {
       # Wiring specific
-      pins	=> [ "step","direction","ms1","ms2" ],
+      pins	=> [ "step","direction","ms1","ms2","slp" ],
       step 	=> [ "C", "1", "out", "low" ],
       direction => [ "E", "7", "out", "low" ],
       ms1	=> [ "C", "3", "out", "low" ],
       ms2	=> [ "C", "2", "out", "low" ],
+      slp	=> [ "E", "6", "out", "low" ],
       ccw	=> "low",
       cw	=> "high",
       # Controller specific
       holdtime  => 7.5 * 1000,
+      sleepval  => "low",
       # Motor specific
       stepsize	=> 1.8,
       canustep  => 1,
       usteps	=> {
-        whole 	=> ["low","low"],
-	half  	=> ["high","low"],
-	quarter	=> ["low","high"],
-	eighth	=> ["high","high"],
+        whole 	=> ["low","low",1],
+	half  	=> ["high","low",0.5],
+	quarter	=> ["low","high",0.25],
+	eighth	=> ["high","high",0.125],
       },
    },
    tilt => {
       # Wiring specific
-      pins	=> [ "step","direction","ms1","ms2" ],
+      pins	=> [ "step","direction","ms1","ms2","slp" ],
       step 	=> [ "D", "5", "out", "low" ],
       direction => [ "D", "4", "out", "low" ],
       ms1	=> [ "D", "7", "out", "low" ],
       ms2	=> [ "D", "6", "out", "low" ],
+      slp	=> [ "D", "13", "out", "low" ],
       ccw	=> "low",
       cw	=> "high",
       # Controller specific
       holdtime  => 7.5 * 1000,
+      sleepval	=> "low",
       # Motor specific
       stepsize	=> 1.8,
       canustep  => 1,
       usteps	=> {
-        whole 	=> ["low","low"],
-	half  	=> ["high","low"],
-	quarter	=> ["low","high"],
-	eighth	=> ["high","high"],
-      },,
+        whole 	=> ["low","low",1],
+	half  	=> ["high","low",0.5],
+	quarter	=> ["low","high",0.25],
+	eighth	=> ["high","high",0.125],
+      },
    },
 );
 
 # Abandon all hope, ye who enter here
 #
 
-my $dbg = 1;
+my $dbg = 0;
 
 my $port;
 my %pinconfigs;
@@ -191,6 +195,7 @@ sub step_motor {
       my @ustepcfg = @{$motors{$motor}{usteps}{$ustepping}};
       set_pin($ms1cfg[0], $ms1cfg[1], $ustepcfg[0]);
       set_pin($ms2cfg[0], $ms2cfg[1], $ustepcfg[1]);
+      $steps /= $ustepcfg[2];
     }
   }
 
@@ -199,6 +204,22 @@ sub step_motor {
     usleep($motors{$motor}{holdtime});
     set_pin($stepcfg[0], $stepcfg[1], "low");
   }
+}
+
+sub sleep_motor {
+  my $motor = shift;
+  my @sleepcfg = @{$motors{$motor}{slp}};
+  my $sleepval = $motors{$motor}{sleepval};
+  
+  set_pin($sleepcfg[0], $sleepcfg[1], $sleepval);
+}
+
+sub wake_motor {
+  my $motor = shift;
+  my @sleepcfg = @{$motors{$motor}{slp}};
+  my $sleepval = $motors{$motor}{sleepval};
+
+  set_pin($sleepcfg[0], $sleepcfg[1], $sleepval eq "high" ? "low" : "high");
 }
 
 if(!$dbg) {
@@ -223,8 +244,18 @@ if(!$dbg) {
 list_motors();
 configure_motor_pins();
 
-
+wake_motor("tilt");
+sleep 1;
+printf("Rotating 90 degrees whole step\n");
 step_motor("tilt", "cw", 90, "whole");
+sleep 1;
+printf("Rotating 90 degrees half step\n");
 step_motor("tilt", "cw", 90, "half");
+sleep 1;
+printf("Rotating 90 degrees quarter step\n");
 step_motor("tilt", "cw", 90, "quarter");
+sleep 1;
+printf("Rotating 90 degrees eighth step\n");
 step_motor("tilt", "cw", 90, "eighth");
+sleep 1;
+sleep_motor("tilt");
