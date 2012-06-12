@@ -20,7 +20,7 @@ my %motors = (
       holdtime  => 7.5 * 1000,
       # Motor specific
       stepsize	=> 1.8,
-      canustep  => 0,
+      canustep  => 1,
       usteps	=> {
         whole 	=> ["low","low"],
 	half  	=> ["high","low"],
@@ -41,7 +41,7 @@ my %motors = (
       holdtime  => 7.5 * 1000,
       # Motor specific
       stepsize	=> 1.8,
-      canustep  => 0,
+      canustep  => 1,
       usteps	=> {
         whole 	=> ["low","low"],
 	half  	=> ["high","low"],
@@ -174,8 +174,7 @@ sub step_motor {
   my $motor = shift;
   my $direction = shift;
   my $angle = shift;
-  my $ms1 = shift;
-  my $ms2 = shift;
+  my $ustepping = shift;
 
   my @stepcfg = @{$motors{$motor}{step}};
   my @dircfg  = @{$motors{$motor}{direction}};
@@ -188,12 +187,10 @@ sub step_motor {
   set_pin($dircfg[0], $dircfg[1], $dir_bit);
 
   if($motors{$motor}{canustep}){
-    if($ms1) {
-      set_pin($ms1cfg[0], $ms1cfg[1], $ms1);
-    }
-
-    if($ms2) {
-      set_pin($ms2cfg[0], $ms2cfg[1], $ms2);
+    if($ustepping) {
+      my @ustepcfg = @{$motors{$motor}{usteps}{$ustepping}};
+      set_pin($ms1cfg[0], $ms1cfg[1], $ustepcfg[0]);
+      set_pin($ms2cfg[0], $ms2cfg[1], $ustepcfg[1]);
     }
   }
 
@@ -227,7 +224,7 @@ list_motors();
 configure_motor_pins();
 
 
-step_motor("tilt", "cw", 90, "low", "low");
-step_motor("tilt", "cw", 90, "high", "low");
-step_motor("tilt", "cw", 90, "low", "high");
-step_motor("tilt", "cw", 90, "high", "high");
+step_motor("tilt", "cw", 90, "whole");
+step_motor("tilt", "cw", 90, "half");
+step_motor("tilt", "cw", 90, "quarter");
+step_motor("tilt", "cw", 90, "eighth");
