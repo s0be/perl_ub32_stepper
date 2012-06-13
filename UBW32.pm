@@ -21,6 +21,8 @@ sub new {
   my $self  = {};
   $self->{PORT} = shift;
   $self->{pinconfigs} = {};
+  $self->{used_spwm_channels} = (1);
+  $self->{spwm_map} = {};
   $self->{port} = config_serport($self->{PORT}, shift, shift, shift, shift);
   $self->{dbg} = 0;
   bless($self, $class);           # but see below
@@ -88,6 +90,10 @@ my %pin_caps = (
          $StIO, $StIO, $StIO, $StIO, $StIO, $StIO, $StIO, $StIO,],
 );
 
+my %analog_pins = (
+  A => [ 1 , 2 , 4 , 8 , 16 , 32 ],
+);
+
 sub config_serport {
   my $p = shift;
   my $db = shift || 8;
@@ -114,12 +120,12 @@ sub validate_pin {
    my $pin = shift;
    if( !$pin_caps{$group} ) {
      printf("Skipping pin %s%s: Invalid pingroup passed [%s] valid: A-G\n", $group, $pin, $group);
-     return 1;
+     return 0;
    } elsif( !$pin_caps{$group}[$pin] ) {
      printf("Skipping pin %s%s: Invalid pin [%s] valid: 0-15\n", $group, $pin, $pin);
-     return 1;
+     return 0;
    }
-   return 0;
+   return 1;
 }
 
 sub get_caps {
@@ -137,9 +143,9 @@ sub get_caps {
 sub get_cap_name {
   my $cap = shift;
   my @caps;
-  foreach my $cap (keys %caps) {
-    if($cap & $caps{$cap}) {
-      push(@caps, $cap);
+  foreach my $capname (keys %caps) {
+    if($cap & $caps{$capname}) {
+      push(@caps, $capname);
     }
   }
   return join(",", @caps);
@@ -156,6 +162,30 @@ sub cap_qty {
   return $count;
 }
 
+sub has_cap {
+  my $group = shift;
+  my $pin = shift;
+  my $cap = shift;
+
+  return $pin_caps{$group}[$pin] & $cap? 1 : 0;
+}
+
+sub analog_mask {
+  my $group = shift;
+  my $pin = shift;
+
+  return $analog_pins{$group}[$pin];
+}
+
+sub find_softpwm_channel {
+  my $self = shift;
+  for (my $c = 1; $c <=64; $c++) {
+    if(!$self->{used_spwm_channels}[$c]) {
+      return $c;
+    }
+  }
+}
+
 sub configure_pin {
   my $self = shift;
   my $group = shift;
@@ -166,25 +196,44 @@ sub configure_pin {
   my $compat_map = $cfg eq "in" ? $caps{DigitalIn} :
 		   $cfg eq "out" ? $caps{DigitalOut} :
 			0;
-
-  $cfg = $compat_map ? $compat_map : $cfg;
+  if($compat_map) {
+    printf("Backwards compatable setup detected, mapping %s to %s\n", $cfg, get_cap_name($compat_map));
+    $cfg = $compat_map;
+  }
   
-  if( validate_pin($group,$pin) ) {
-  } elsif( $pin_caps{$group}[$pin] & $cfg == 0 ) {
-     printf("Skipping pin %s%s: Invalid direction was passed [%s] valid: {%s}\n", 
+  if( !validate_pin($group,$pin) ) {
+  } elsif( !has_cap($group, $pin, $cfg) ) {
+     printf("Skipping pin %s%s: Invalid state was requested [%s] valid: {%s}\n", 
             $group, $pin, get_cap_name($cfg), get_caps($group, $pin));
   } elsif( cap_qty($cfg) > 1 ) {
      printf("Skipping pin %s%s: Cannot set multiple states simultaneously [%s] valid: {%s}",
             $group, $pin, get_cap_name($cfg), get_caps($group, $pin));
   } else {
      my $cmd;
-     if($cfg & $caps{DigitalIn})
-     {
+     if($cfg & $caps{DigitalIn}) {
      	$cmd = sprintf("PD,%s,%s,%s" , $group,$pin,1);
      } elsif( $cfg & $caps{DigitalOut} ) {
      	$cmd = sprintf("PD,%s,%s,%s" , $group,$pin,0);
+     } elsif( $cfg & $caps{AnalogIn} ) {
+        $cmd = sprintf("CA,%s", analog_mask($group, $pin));
+     } elsif( $cfg & $caps{SoftPWMOut} ) {
+	my $free_channel = find_softpwm_channel($self);
+        $self->{used_spwm_channels}[$free_channel] = 1;
+        $self->{spwm_map}{$group}[$pin] = $free_channel;
+	# This assumes that 0 is not a valid spwm channel to configure, and 64 is the 
+	# maximum TOTAL number of spwm channels available.
+        my $count = $#{$self->{used_spwm_channels}} ;
+	if($count > 64) {
+          printf("Too many Software PWM Channels Configured: [%s] max: [64]\n", $count);
+	  return 1;
+	}
+     	$cmd = sprintf("PC,4,%s\nPC,2,%s,%s,%s",$count,$free_channel,$group,$pin);
+     } elsif( $cfg & $caps{HardPWMOut} ) {
+       #Stupidly assuming a pin must be set to Digital Output to PWM
+       $cmd = sprintf("PD,%s,%s,%s" , $group,$pin,0);
      } else {
-     	$cmd = sprintf("PD,%s,%s,%s" , $group,$pin,$cfg);
+       printf("This shouldn't happen(Using an old library with code written for new module?).  Please report: [%s][%s][%s]\n",$group,$pin,$cfg);
+       return 1;
      }
      if( !$self->{dbg} ) {
        $self->{port}->write("$cmd\n");
@@ -197,11 +246,13 @@ sub configure_pin {
      if( $result !~ /OK/ ) {
         printf("Pin configuration failed: [%s][$cmd]\n", $result);
      } else {
-       $self->{pinconfigs}{"$group$pin"}{direction} = $cfg;
-       $self->{pinconfigs}{"$group$pin"}{state} = "Unknown";
+       printf("Pin %s%s configured as %s\n", $group, $pin, get_cap_name($cfg));
+       $self->{pinconfigs}{$group}[$pin]{mode} = $cfg;
+       $self->{pinconfigs}{$group}[$pin]{state} = "Unknown";
+       return 0;
      }
-     
   }
+  return 1;
 }
 
 sub set_pin {
@@ -217,9 +268,10 @@ sub set_pin {
   my $cmd = sprintf("PO,%s,%s,%s", $group,$pin,$val_bit);
   if( $val_bit < 0 ) {
      printf("Skipping pin %s%s: Invalid pin state was passed [%s] valid: {high,low}\n", $group, $pin, $value);
-  } elsif( validate_pin($group,$pin) ){
-  } elsif( $self->{pinconfigs}{"$group$pin"}{direction} & $caps{DigitalOut} == 0 ) {
-     printf("Skipping pin %s%s: Pin is set to input or no direction explicitly set\n", $group, $pin);
+  } elsif( !validate_pin($group,$pin) ){
+  } elsif( $self->{pinconfigs}{$group}[$pin]{mode} != $caps{DigitalOut} ) {
+     printf("Skipping pin %s%s: Pin is set to input or no direction explicitly set[%s]\n",
+            $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode}));
   } else {
     if(!$self->{dbg}){
       $self->{port}->write("$cmd\n");
@@ -232,7 +284,7 @@ sub set_pin {
     if( $result !~ /OK/ ) {
        printf("Pin state failed: [%s]\n", $result);
     } else {
-       $self->{pinconfigs}{"$group$pin"}{state} = $value;
+       $self->{pinconfigs}{$group}[$pin]{state} = $value;
     }
   }
 }
