@@ -2,7 +2,7 @@
 
 use strict;
 use Time::HiRes qw(usleep nanosleep);
-use UBW32 qw(:DEFAULT);
+use UBW32 qw(:DEFAULT %caps);
 my $serialport = "/dev/ttyACM0";
 
 my $ubw=UBW32->new($serialport);
@@ -154,65 +154,76 @@ list_motors();
 configure_motor_pins();
 
 wake_motor("tilt");
-sleep 1;
+#leep 1;
 printf("Rotating 90 degrees whole step\n");
 step_motor("tilt", "cw", 90, "whole");
-sleep 1;
-printf("Rotating 90 degrees half step\n");
-step_motor("tilt", "cw", 90, "half");
-sleep 1;
-printf("Rotating 90 degrees quarter step\n");
-step_motor("tilt", "cw", 90, "quarter");
-sleep 1;
-printf("Rotating 90 degrees eighth step\n");
-step_motor("tilt", "cw", 90, "eighth");
-sleep 1;
+#leep 1;
+#printf("Rotating 90 degrees half step\n");
+#step_motor("tilt", "cw", 90, "half");
+#sleep 1;
+#printf("Rotating 90 degrees quarter step\n");
+#step_motor("tilt", "cw", 90, "quarter");
+#sleep 1;
+#printf("Rotating 90 degrees eighth step\n");
+#step_motor("tilt", "cw", 90, "eighth");
+#sleep 1;
 sleep_motor("tilt");
 
 wake_motor("tilt");
-sleep 1;
+#leep 1;
 printf("Rotating 90 degrees whole step\n");
 step_motor("tilt", "ccw", 90, "whole");
-sleep 1;
-printf("Rotating 90 degrees half step\n");
-step_motor("tilt", "ccw", 90, "half");
-sleep 1;
-printf("Rotating 90 degrees quarter step\n");
-step_motor("tilt", "ccw", 90, "quarter");
-sleep 1;
-printf("Rotating 90 degrees eighth step\n");
-step_motor("tilt", "ccw", 90, "eighth");
-sleep 1;
+#leep 1;
+#printf("Rotating 90 degrees half step\n");
+#step_motor("tilt", "ccw", 90, "half");
+#sleep 1;
+#printf("Rotating 90 degrees quarter step\n");
+#step_motor("tilt", "ccw", 90, "quarter");
+#sleep 1;
+#printf("Rotating 90 degrees eighth step\n");
+#step_motor("tilt", "ccw", 90, "eighth");
+#sleep 1;
 sleep_motor("tilt");
 
 wake_motor("pan");
-sleep 1;
+#leep 1;
 printf("Rotating 90 degrees whole step\n");
 step_motor("pan", "cw", 90, "whole");
-sleep 1;
-printf("Rotating 90 degrees half step\n");
-step_motor("pan", "cw", 90, "half");
-sleep 1;
-printf("Rotating 90 degrees quarter step\n");
-step_motor("pan", "cw", 90, "quarter");
-sleep 1;
-printf("Rotating 90 degrees eighth step\n");
-step_motor("pan", "cw", 90, "eighth");
-sleep 1;
+#leep 1;
+#printf("Rotating 90 degrees half step\n");
+#step_motor("pan", "cw", 90, "half");
+#sleep 1;
+#printf("Rotating 90 degrees quarter step\n");
+#step_motor("pan", "cw", 90, "quarter");
+#sleep 1;
+#printf("Rotating 90 degrees eighth step\n");
+#step_motor("pan", "cw", 90, "eighth");
+#sleep 1;
 sleep_motor("pan");
 
 wake_motor("pan");
-sleep 1;
+#leep 1;
 printf("Rotating 90 degrees whole step\n");
 step_motor("pan", "ccw", 90, "whole");
-sleep 1;
-printf("Rotating 90 degrees half step\n");
-step_motor("pan", "ccw", 90, "half");
-sleep 1;
-printf("Rotating 90 degrees quarter step\n");
-step_motor("pan", "ccw", 90, "quarter");
-sleep 1;
-printf("Rotating 90 degrees eighth step\n");
-step_motor("pan", "ccw", 90, "eighth");
-sleep 1;
+#leep 1;
+#printf("Rotating 90 degrees half step\n");
+#step_motor("pan", "ccw", 90, "half");
+#sleep 1;
+#printf("Rotating 90 degrees quarter step\n");
+#step_motor("pan", "ccw", 90, "quarter");
+#sleep 1;
+#printf("Rotating 90 degrees eighth step\n");
+#step_motor("pan", "ccw", 90, "eighth");
+#sleep 1;
 sleep_motor("pan");
+
+# For this test, we have Pin F8 wired through a resister to B5
+# With an LED through a resister to ground in parallel to B5 so that:
+#
+# Setting F8 high will put 2.8v onto B5 (allowing B5 to be Digital High
+# but not 3.3v for Analog in).  Also, B5 can be low and F8 can go high and
+# light the LED.
+
+$ubw->configure_pin("F","8",$caps{DigitalOut});
+$ubw->configure_pin("B","5",$caps{DigitalIn});
+$ubw->set_pin("F","8","low");
