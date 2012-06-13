@@ -1,9 +1,10 @@
-#!/usr/bin/perl -w
+#!/usr/bin/perl
 #
 
 package UBW32;
 
 use strict;
+use warnings;
 use Device::SerialPort;
 use Time::HiRes qw(usleep nanosleep);
 use Exporter;
@@ -270,7 +271,7 @@ sub set_pin {
      printf("Skipping pin %s%s: Invalid pin state was passed [%s] valid: {high,low}\n", $group, $pin, $value);
   } elsif( !validate_pin($group,$pin) ){
   } elsif( $self->{pinconfigs}{$group}[$pin]{mode} != $caps{DigitalOut} ) {
-     printf("Skipping pin %s%s: Pin is set to input or no direction explicitly set[%s]\n",
+     printf("Skipping pin %s%s: Pin is not set to output[%s]\n",
             $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode}));
   } else {
     if(!$self->{dbg}){
@@ -285,8 +286,41 @@ sub set_pin {
        printf("Pin state failed: [%s]\n", $result);
     } else {
        $self->{pinconfigs}{$group}[$pin]{state} = $value;
+       return 0;
     }
   }
+  return 1;
+}
+
+sub get_pin {
+  my $self = shift;
+  my $group = shift;
+  my $pin = shift;
+
+  my $result = "";
+
+  if( !validate_pin($group,$pin) ){
+  } elsif( $self->{pinconfigs}{$group}[$pin]{mode} != $caps{DigitalIn} ) {
+     printf("Skipping read of %s%s: Pin is not set to input[%s]\n",
+            $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode}));
+  } else {
+    if(!$self->{dbg}){
+      my $cmd = sprintf("PI,%s,%s", $group, $pin);
+      $self->{port}->write("$cmd\n");
+      $self->{port}->write_drain;
+      usleep(7.5*1000);
+      $result = $self->{port}->read(255);
+    } else {
+      $result = "OK";
+    }
+    if( $result !~ /OK/ ) {
+      printf("Reading Pin failed: [%s]\n", $result);
+    } else {
+      $result =~ /PI,[A-G],\d+\nPI,(?<bit>[01])/m;
+      return $+{bit};
+    }
+  }
+  return -1;
 }
 
 1;
