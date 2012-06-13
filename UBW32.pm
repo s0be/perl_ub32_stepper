@@ -107,6 +107,7 @@ sub config_serport {
   $tempport->baudrate($br);
   $tempport->parity($pa);
   $tempport->stopbits($sb);
+  $tempport->write("R\n");
   return $tempport;
 }
 
