@@ -217,13 +217,19 @@ step_motor("pan", "ccw", 90, "whole");
 #sleep 1;
 sleep_motor("pan");
 
-# For this test, we have Pin F8 wired through a resister to B5
-# With an LED through a resister to ground in parallel to B5 so that:
+# For this test, we have Pin F8 wired through a resister to B3
+# With an LED through a resister to ground in parallel to B3 so that:
 #
-# Setting F8 high will put 2.8v onto B5 (allowing B5 to be Digital High
-# but not 3.3v for Analog in).  Also, B5 can be low and F8 can go high and
+# Setting F8 high will put 2.8v onto B3 (allowing B3 to be Digital High
+# but not 3.3v for Analog in).  Also, B3 can be low and F8 can go high and
 # light the LED.
 
 $ubw->configure_pin("F","8",$caps{DigitalOut});
-$ubw->configure_pin("B","5",$caps{DigitalIn});
+$ubw->configure_pin("B","3",$caps{DigitalIn});
 $ubw->set_pin("F","8","low");
+my $pin = $ubw->get_pin("B","3");
+printf("B3 is: %s\n", $pin ? "high" : "low");
+$ubw->set_pin("F","8","high");
+$pin = $ubw->get_pin("B","3");
+printf("B3 is: %s\n", $pin ? "high" : "low");
+
