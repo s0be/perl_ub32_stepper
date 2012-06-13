@@ -12,7 +12,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 $VERSION     = "0.00a";
 @ISA         = qw(Exporter);
 @EXPORT      = ();
-@EXPORT_OK   = qw(configure_pin set_pin print_pin enable_debug);
+@EXPORT_OK   = qw(configure_pin set_pin print_pin enable_debug %caps);
 %EXPORT_TAGS = ( DEFAULT => [qw(&configure_pin &set_pin &print_pin &enable_debug)]);
 
 sub new {
@@ -34,7 +34,7 @@ sub enable_debug {
   $self->{dbg} = shift;
 }
 
-my %caps = (
+our %caps = (
    NC		=> 0,
    DigitalIn 	=> 1,
    DigitalOut 	=> 2,
@@ -61,11 +61,11 @@ my $BUTT = $StIO + 512;		# Pin Has button wired on pin to ground
 
 my %pin_caps = (
 # Group     0      1      2      3      4      5      6      7   
-  A  => [$ADIO, $ADIO, $ADIO, $ADIO, $ADIO, $ADIO, $StIO, $StIO, 
+  A  => [$StIO, $StIO, $StIO, $StIO, $StIO, $StIO, $StIO, $StIO, 
 #           8      9     10     11     12     13     14     15
          $StIO, $StIO, $StIO, $StIO, $StIO, $StIO, $StIO, $StIO,],
 # Group     0      1      2      3      4      5      6      7   
-  B  => [$StIO, $StIO, $StIO, $StIO, $StIO, $StIO, $StIO, $StIO, 
+  B  => [$ADIO, $ADIO, $ADIO, $ADIO, $ADIO, $ADIO, $StIO, $StIO, 
 #           8      9     10     11     12     13     14     15
          $StIO, $StIO, $StIO, $StIO, $StIO, $StIO, $StIO, $StIO,],
 # Group     0      1      2      3      4      5      6      7   
@@ -91,7 +91,7 @@ my %pin_caps = (
 );
 
 my %analog_pins = (
-  A => [ 1 , 2 , 4 , 8 , 16 , 32 ],
+  B => [ 1 , 2 , 4 , 8 , 16 , 32 ],
 );
 
 sub config_serport {
@@ -131,7 +131,7 @@ sub validate_pin {
 sub get_caps {
   my $group = shift;
   my $pin = shift;
-  my @caps = [];
+  my @caps;
   foreach my $cap (keys %caps) {
     if($pin_caps{$group}[$pin] & $caps{$cap}) {
       push(@caps, $cap);
