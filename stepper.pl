@@ -6,7 +6,7 @@ use UBW32 qw(:DEFAULT %caps);
 my $serialport = "/dev/ttyACM0";
 
 my $ubw=UBW32->new($serialport);
-$ubw->enable_debug(1);
+#$ubw->enable_debug(1);
 my %motors = (
    pan => {
       # Wiring specific
@@ -232,9 +232,9 @@ printf("B3 is: %s\n", $pin ? "high" : "low");
 $ubw->set_pin("F","8","high");
 $pin = $ubw->get_pin("B","3");
 printf("B3 is: %s\n", $pin ? "high" : "low");
-$ubw->configure_pin("B","2",$caps{AnalogIn});
-my (%points) = $ubw->get_analog("B","2",10,1000);
+$ubw->configure_pin("B","3",$caps{AnalogIn});
+my (%points) = $ubw->get_analog("B","3",10,1000);
 
 for(my $point = 0; $point < 10; $point ++) { 
-  printf("B2:%s\n", $points{"B"}[2][$point]);
+  printf("B3:%s\n", $points{"B"}[3][$point]);
 }
