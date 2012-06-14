@@ -346,10 +346,10 @@ sub get_analog {
     if(!$self->{dbg}){
       $self->{port}->write("$cmd\n");
       $self->{port}->write_drain;
-      usleep(7.5*1000);
+      usleep(7.5*1000 + $samples * $interval);
       #  Command sent, new line, maximum analog string length * sample rate (and Commas), new line, OK, new line, and 1 safety
       my $readlen = length($cmd) + 2 + 5 * $samples + 2 + 2 + 2 + 1;
-      $result = $self->port->read($readlen); 
+      $result = $self->{port}->read($readlen); 
     } else {
       my @tmp;
       for(my $i=0; $i < $samples; $i++) {
@@ -360,8 +360,9 @@ sub get_analog {
     if($result !~ /OK/) {
       printf("Reading Pin failed: [%s]\n", $result);
     } else {
-      $result =~ /$cmd\nIA,([\d\,]+)\nOK\n/mg;
-      my @a = split(/,/,$1);
+      # must match \n\r instead of \n.  get analog is returning \r\r instead of a standard newline
+      $result =~ m/$cmd\nIA,(?<pin>[\d\,]+)[\n\r]+OK/m;
+      my @a = split(/,/,$+{pin});
       $output{$group}[$pin] = [@a];
     }
   }  
