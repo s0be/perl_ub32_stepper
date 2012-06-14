@@ -103,11 +103,13 @@ sub config_serport {
   my $sb = shift || 1;
   printf("Configuring %s\n", $p);
   my $tempport = Device::SerialPort->new($p);
-  $tempport->databits($db);
-  $tempport->baudrate($br);
-  $tempport->parity($pa);
-  $tempport->stopbits($sb);
-  $tempport->write("R\n");
+  if($tempport) {
+    $tempport->databits($db);
+    $tempport->baudrate($br);
+    $tempport->parity($pa);
+    $tempport->stopbits($sb);
+    $tempport->write("R\n");
+  }
   return $tempport;
 }
 
@@ -267,7 +269,6 @@ sub set_pin {
                 ($value eq "high") ? 1 :
                 -1;
 
-  my $cmd = sprintf("PO,%s,%s,%s", $group,$pin,$val_bit);
   if( $val_bit < 0 ) {
      printf("Skipping pin %s%s: Invalid pin state was passed [%s] valid: {high,low}\n", $group, $pin, $value);
   } elsif( !validate_pin($group,$pin) ){
@@ -275,13 +276,14 @@ sub set_pin {
      printf("Skipping pin %s%s: Pin is not set to output[%s]\n",
             $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode}));
   } else {
+    my $cmd = sprintf("PO,%s,%s,%s", $group,$pin,$val_bit);
     if(!$self->{dbg}){
       $self->{port}->write("$cmd\n");
       $self->{port}->write_drain;
       usleep(7.5*1000);
       $result = $self->{port}->read(255);
     } else {
-      $result = "OK";
+      $result = sprintf("%s\nOK\n", $cmd);
     }
     if( $result !~ /OK/ ) {
        printf("Pin state failed: [%s]\n", $result);
@@ -305,23 +307,65 @@ sub get_pin {
      printf("Skipping read of %s%s: Pin is not set to input[%s]\n",
             $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode}));
   } else {
+    my $cmd = sprintf("PI,%s,%s", $group, $pin);
     if(!$self->{dbg}){
-      my $cmd = sprintf("PI,%s,%s", $group, $pin);
       $self->{port}->write("$cmd\n");
       $self->{port}->write_drain;
       usleep(7.5*1000);
       $result = $self->{port}->read(255);
     } else {
-      $result = "OK";
+      my $tempbit = int(rand() + .5);
+      $result = sprintf("%s\nPI,%s\nOK\n", $cmd, $tempbit);;
     }
     if( $result !~ /OK/ ) {
       printf("Reading Pin failed: [%s]\n", $result);
     } else {
-      $result =~ /PI,[A-G],\d+\nPI,(?<bit>[01])/m;
+      $result =~ /PI,[A-G],\d+\nPI,(?<bit>[01])\nOK\n/m;
       return $+{bit};
     }
   }
   return -1;
+}
+
+sub get_analog {
+  my $self = shift;
+  my $group = shift;
+  my $pin = shift;
+  my $samples = shift;
+  my $interval = shift; # us
+  my %output;
+
+  if( !validate_pin($group,$pin) ){
+  } elsif( $self->{pinconfigs}{$group}[$pin]{mode} != $caps{AnalogIn} ) {
+    printf("Skipping read of %s%s: Pin is not set to Analog Input[%s]\n",
+           $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode}));
+  } else {
+    my $pinmask = analog_mask($group,$pin);
+    my $cmd = sprintf("IA,%s,%s,%s", $pinmask, $interval, $samples);
+    my $result;
+    if(!$self->{dbg}){
+      $self->{port}->write("$cmd\n");
+      $self->{port}->write_drain;
+      usleep(7.5*1000);
+      #  Command sent, new line, maximum analog string length * sample rate (and Commas), new line, OK, new line, and 1 safety
+      my $readlen = length($cmd) + 2 + 5 * $samples + 2 + 2 + 2 + 1;
+      $result = $self->port->read($readlen); 
+    } else {
+      my @tmp;
+      for(my $i=0; $i < $samples; $i++) {
+        push(@tmp, int(rand(1024)));
+      }
+      $result = sprintf("%s\nIA,%s\nOK\n", $cmd, join(",", @tmp));
+    }
+    if($result !~ /OK/) {
+      printf("Reading Pin failed: [%s]\n", $result);
+    } else {
+      $result =~ /$cmd\nIA,([\d\,]+)\nOK\n/mg;
+      my @a = split(/,/,$1);
+      $output{$group}[$pin] = [@a];
+    }
+  }  
+  return %output;
 }
 
 1;
