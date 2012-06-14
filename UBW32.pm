@@ -92,7 +92,13 @@ my %pin_caps = (
 );
 
 my %analog_pins = (
+# Pin:   0   1   2   3   4    5
   B => [ 1 , 2 , 4 , 8 , 16 , 32 ],
+);
+
+my %hwpwm_pins = (
+# Pin:   0  1  2  3  4
+  D => [ 1, 2 ,3, 4, 5],
 );
 
 sub config_serport {
@@ -131,7 +137,7 @@ sub validate_pin {
    } elsif( !$pin_caps{$group}[$pin] ) {
      printf("Skipping pin %s%s: Invalid pin [%s] valid: 0-15\n", $group, $pin, $pin);
      return 0;
-   }
+   } 
    return 1;
 }
 
@@ -208,6 +214,7 @@ sub configure_pin {
     $cfg = $compat_map;
   }
   
+
   if( !validate_pin($group,$pin) ) {
   } elsif( !has_cap($group, $pin, $cfg) ) {
      printf("Skipping pin %s%s: Invalid state was requested [%s] valid: {%s}\n", 
@@ -243,6 +250,11 @@ sub configure_pin {
        return 1;
      }
      if( !$self->{dbg} ) {
+       if($self->{pinconfigs}{$group} && $self->{pinconfigs}{$group}[$pin] && 
+          $self->{pinconfigs}{$group}[$pin]{mode} == $caps{HardPWMOut} ) {
+         # We must disable Hardware PWM before setting a new mode
+         hw_pwm($self, $group, $pin, 0);
+       }
        $self->{port}->write("$cmd\n");
        $self->{port}->write_drain;
        usleep(10*1000);
@@ -370,6 +382,38 @@ sub get_analog {
     }
   }  
   return %output;
+}
+
+sub hw_pwm {
+  my $self = shift;
+  my $group = shift;
+  my $pin = shift;
+  my $duty_cycle = int(shift);
+  if( !validate_pin($group,$pin) ) {
+  } elsif(!$self->{pinconfigs}{$group} || !$self->{pinconfigs}{$group}[$pin]) {
+    printf("Pin has not been configured[%s%s]\n", $group, $pin);
+  } elsif($self->{pinconfigs}{$group}[$pin]{mode} != $caps{HardPWMOut} ){
+    printf("Skipping setting PWM on %s%s: Pin is not set to Hardware PWM[%s]\n",
+           $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode}));
+  } else {
+    my $chan = $hwpwm_pins{$group}[$pin];
+    my $cmd = sprintf("PM,%s,%s", $chan, $duty_cycle);
+    my $result;
+    if(! $self->{dbg} ){
+      $self->{port}->write("$cmd\n");
+      $self->{port}->write_drain;
+      usleep(7.5*1000);
+      $result = $self->{port}->read(length($cmd) + 2 + 2 + 2 + 1);
+    } else {
+      $result = sprintf("%s\nOK\n", $cmd);
+    }
+    if($result !~ /OK/) {
+      printf("Setting HW Pwm on Pin failed: [%s]\n", $result);
+    } else {
+      return 0;
+    }
+  }
+  return 1;
 }
 
 1;
