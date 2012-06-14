@@ -239,3 +239,10 @@ my (%points) = $ubw->get_analog("B","3",10,1000);
 for(my $point = 0; $point < 10; $point ++) { 
   printf("B3:%s\n", $points{"B"}[3][$point]);
 }
+
+$ubw->configure_pin("D","0",$caps{HardPWMOut});
+$ubw->configure_pin("D","1",$caps{HardPWMOut});
+$ubw->configure_pin("D","2",$caps{HardPWMOut});
+$ubw->hw_pwm("D","0",65535);
+$ubw->hw_pwm("D","1",65535*0.33);
+$ubw->hw_pwm("D","2",65535*0.1);
