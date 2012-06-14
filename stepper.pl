@@ -228,10 +228,11 @@ $ubw->configure_pin("F","8",$caps{DigitalOut});
 $ubw->configure_pin("B","3",$caps{DigitalIn});
 $ubw->set_pin("F","8","low");
 my $pin = $ubw->get_pin("B","3");
-printf("B3 is: %s\n", $pin ? "high" : "low");
+printf("B3 is: %s\n", $pin );
 $ubw->set_pin("F","8","high");
+sleep 2;
 $pin = $ubw->get_pin("B","3");
-printf("B3 is: %s\n", $pin ? "high" : "low");
+printf("B3 is: %s\n", $pin );
 $ubw->configure_pin("B","3",$caps{AnalogIn});
 my (%points) = $ubw->get_analog("B","3",10,1000);
 
