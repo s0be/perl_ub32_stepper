@@ -114,10 +114,22 @@ sub config_serport {
     $tempport->baudrate($br);
     $tempport->parity($pa);
     $tempport->stopbits($sb);
-    $tempport->write("R\n");
-    usleep(10 * 1000);
     # It seems like we need to reset the analog inputs to use them as digital
     $tempport->write("CA,0\n");
+    usleep(100 * 1000);
+    # Also, "R" doesn't seem to reset hardware PWM channels...
+    $tempport->write("PM,1,0\n");
+    usleep(100 * 1000);
+    $tempport->write("PM,2,0\n");
+    usleep(100 * 1000);
+    $tempport->write("PM,3,0\n");
+    usleep(100 * 1000);
+    $tempport->write("PM,4,0\n");
+    usleep(100 * 1000);
+    $tempport->write("PM,5,0\n");
+    usleep(100 * 1000);
+    $tempport->write("R\n");
+    usleep(100 * 1000);
   }
   return $tempport;
 }
