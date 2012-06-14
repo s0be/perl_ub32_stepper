@@ -6,16 +6,16 @@ use UBW32 qw(:DEFAULT %caps);
 my $serialport = "/dev/ttyACM0";
 
 my $ubw=UBW32->new($serialport);
-
+$ubw->enable_debug(1);
 my %motors = (
    pan => {
       # Wiring specific
       pins	=> [ "step","direction","ms1","ms2","slp" ],
-      step 	=> [ "C", "1", "out", "low" ],
-      direction => [ "E", "7", "out", "low" ],
-      ms1	=> [ "C", "3", "out", "low" ],
-      ms2	=> [ "C", "2", "out", "low" ],
-      slp	=> [ "E", "6", "out", "low" ],
+      step 	=> [ "C", "1", $caps{DigitalOut}, "low" ],
+      direction => [ "E", "7", $caps{DigitalOut}, "low" ],
+      ms1	=> [ "C", "3", $caps{DigitalOut}, "low" ],
+      ms2	=> [ "C", "2", $caps{DigitalOut}, "low" ],
+      slp	=> [ "E", "6", $caps{DigitalOut}, "low" ],
       ccw	=> "low",
       cw	=> "high",
       # Controller specific
@@ -34,11 +34,11 @@ my %motors = (
    tilt => {
       # Wiring specific
       pins	=> [ "step","direction","ms1","ms2","slp" ],
-      step 	=> [ "D", "5", "out", "low" ],
-      direction => [ "D", "4", "out", "low" ],
-      ms1	=> [ "D", "7", "out", "low" ],
-      ms2	=> [ "D", "6", "out", "low" ],
-      slp	=> [ "D", "13", "out", "low" ],
+      step 	=> [ "D", "5", $caps{DigitalOut}, "low" ],
+      direction => [ "D", "4", $caps{DigitalOut}, "low" ],
+      ms1	=> [ "D", "7", $caps{DigitalOut}, "low" ],
+      ms2	=> [ "D", "6", $caps{DigitalOut}, "low" ],
+      slp	=> [ "D", "13", $caps{DigitalOut}, "low" ],
       ccw	=> "low",
       cw	=> "high",
       # Controller specific
@@ -84,7 +84,7 @@ sub configure_motor_pins {
 
       printf("Configuring: %s -> %s\n", $motor, $function);
       $ubw->configure_pin($group, $pin, $dir);
-      if($dir eq "out") {
+      if($dir == $caps{DigitalOut}) {
         $ubw->set_pin($group, $pin, $value);
       }
     }
@@ -232,4 +232,9 @@ printf("B3 is: %s\n", $pin ? "high" : "low");
 $ubw->set_pin("F","8","high");
 $pin = $ubw->get_pin("B","3");
 printf("B3 is: %s\n", $pin ? "high" : "low");
+$ubw->configure_pin("B","2",$caps{AnalogIn});
+my (%points) = $ubw->get_analog("B","2",10,1000);
 
+for(my $point = 0; $point < 10; $point ++) { 
+  printf("B2:%s\n", $points{"B"}[2][$point]);
+}
