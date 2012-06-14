@@ -109,6 +109,9 @@ sub config_serport {
     $tempport->parity($pa);
     $tempport->stopbits($sb);
     $tempport->write("R\n");
+    usleep(10 * 1000);
+    # It seems like we need to reset the analog inputs to use them as digital
+    $tempport->write("CA,0\n");
   }
   return $tempport;
 }
@@ -320,7 +323,7 @@ sub get_pin {
     if( $result !~ /OK/ ) {
       printf("Reading Pin failed: [%s]\n", $result);
     } else {
-      $result =~ /PI,[A-G],\d+\nPI,(?<bit>[01])\nOK\n/m;
+      $result =~ /$cmd\nPI,(?<bit>[01])[\n\r]*OK/m;
       return $+{bit};
     }
   }
