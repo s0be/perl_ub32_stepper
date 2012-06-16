@@ -331,10 +331,10 @@ sub set_pin {
        printf("Pin state failed: [%s]\n", $result);
     } else {
        $self->{pinconfigs}{$group}[$pin]{state} = $value;
-       return 0;
+       return 1;
     }
   }
-  return 1;
+  return 0;
 }
 
 sub get_pin {
@@ -435,10 +435,10 @@ sub hw_pwm {
     if($result !~ /OK/) {
       &{ $self->{msg} }(sprintf("Setting HW Pwm on Pin failed: [%s]\n", $result));
     } else {
-      return 0;
+      return 1;
     }
   }
-  return 1;
+  return 0;
 }
 
 1;
