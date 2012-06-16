@@ -6,7 +6,10 @@ use UBW32 qw(:DEFAULT %caps);
 my $serialport = "/dev/ttyACM0";
 
 my $ubw=UBW32->new($serialport);
-#$ubw->enable_debug(1);
+$ubw->enable_debug(1);
+my $msg = sub { print @_ };
+
+$ubw->set_msg_handler($msg);
 my %motors = (
    pan => {
       # Wiring specific
@@ -205,6 +208,7 @@ wake_motor("pan");
 #leep 1;
 printf("Rotating 90 degrees whole step\n");
 step_motor("pan", "ccw", 90, "whole");
+step_motor("pan", "cw", 270, "whole");
 #leep 1;
 #printf("Rotating 90 degrees half step\n");
 #step_motor("pan", "ccw", 90, "half");
@@ -246,3 +250,11 @@ $ubw->configure_pin("D","2",$caps{HardPWMOut});
 $ubw->hw_pwm("D","0",65535);
 $ubw->hw_pwm("D","1",65535*0.33);
 $ubw->hw_pwm("D","2",65535*0.1);
+
+sleep 2;
+#$ubw->configure_pin("D","0",$caps{DigitalOut});
+#$ubw->configure_pin("D","1",$caps{DigitalOut});
+#$ubw->configure_pin("D","2",$caps{DigitalOut});
+
+# G15 isn't setup, should fail gracefully.
+$ubw->set_pin("G","15","low");
