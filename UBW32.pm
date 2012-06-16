@@ -89,6 +89,7 @@ sub new {
   my $self  = {};
   $self->{PORT} = shift;
   $self->{pinconfigs} = {};
+  $self->{msg} = sub {};
   foreach my $g ( qw(A B C D E F G)) {
     for( my $p = 0; $p <= 15; $p++ ) {
       $self->{pinconfigs}{$g}[$p]{mode} = $caps{Unconfigured};
@@ -108,13 +109,18 @@ sub enable_debug {
   $self->{dbg} = shift;
 }
 
+sub set_msg_handler {
+  my $self = shift;
+  my $handler = shift;
+  $self->{msg} = $handler;
+}
+
 sub config_serport {
   my $p = shift;
   my $db = shift || 8;
   my $br = shift || 9600;
   my $pa = shift || "none";
   my $sb = shift || 1;
-  printf("Configuring %s\n", $p);
   my $tempport = Device::SerialPort->new($p);
   if($tempport) {
     $tempport->databits($db);
@@ -148,13 +154,14 @@ sub print_pin {
 }
 
 sub validate_pin {
+   my $self = shift;
    my $group = shift;
    my $pin = shift;
    if( !$pin_caps{$group} ) {
-     printf("Skipping pin %s%s: Invalid pingroup passed [%s] valid: A-G\n", $group, $pin, $group);
+     &{ $self->{msg}}(printf("Skipping pin %s%s: Invalid pingroup passed [%s] valid: A-G\n", $group, $pin, $group));
      return 0;
    } elsif( !$pin_caps{$group}[$pin] ) {
-     printf("Skipping pin %s%s: Invalid pin [%s] valid: 0-15\n", $group, $pin, $pin);
+     &{ $self->{msg}}(printf("Skipping pin %s%s: Invalid pin [%s] valid: 0-15\n", $group, $pin, $pin));
      return 0;
    } 
    return 1;
@@ -229,18 +236,18 @@ sub configure_pin {
 		   $cfg eq "out" ? $caps{DigitalOut} :
 			0;
   if($compat_map) {
-    printf("Backwards compatable setup detected, mapping %s to %s\n", $cfg, get_cap_name($compat_map));
+    &{ $self->{msg} }(sprintf("Backwards compatable setup detected, mapping %s to %s\n", $cfg, get_cap_name($compat_map)));
     $cfg = $compat_map;
   }
   
 
-  if( !validate_pin($group,$pin) ) {
+  if( !validate_pin($self, $group,$pin) ) {
   } elsif( !has_cap($group, $pin, $cfg) ) {
-     printf("Skipping pin %s%s: Invalid state was requested [%s] valid: {%s}\n", 
-            $group, $pin, get_cap_name($cfg), get_caps($group, $pin));
+     &{ $self->{msg} }(sprintf("Skipping pin %s%s: Invalid state was requested [%s] valid: {%s}\n", 
+            $group, $pin, get_cap_name($cfg), get_caps($group, $pin)));
   } elsif( cap_qty($cfg) > 1 ) {
-     printf("Skipping pin %s%s: Cannot set multiple states simultaneously [%s] valid: {%s}",
-            $group, $pin, get_cap_name($cfg), get_caps($group, $pin));
+     &{ $self->{msg} }(sprintf("Skipping pin %s%s: Cannot set multiple states simultaneously [%s] valid: {%s}",
+            $group, $pin, get_cap_name($cfg), get_caps($group, $pin)));
   } else {
      my $cmd;
      if($cfg & $caps{DigitalIn}) {
@@ -257,7 +264,7 @@ sub configure_pin {
 	# maximum TOTAL number of spwm channels available.
         my $count = $#{$self->{used_spwm_channels}} ;
 	if($count > 64) {
-          printf("Too many Software PWM Channels Configured: [%s] max: [64]\n", $count);
+          &{ $self->{msg} }(sprintf("Too many Software PWM Channels Configured: [%s] max: [64]\n", $count));
 	  return 1;
 	}
      	$cmd = sprintf("PC,4,%s\nPC,2,%s,%s,%s",$count,$free_channel,$group,$pin);
@@ -265,7 +272,9 @@ sub configure_pin {
        #Stupidly assuming a pin must be set to Digital Output to PWM
        $cmd = sprintf("PD,%s,%s,%s" , $group,$pin,0);
      } else {
-       printf("This shouldn't happen(Using an old library with code written for new module?).  Please report: [%s][%s][%s]\n",$group,$pin,$cfg);
+       # Maybe this should explicitly print
+       &{ $self->{msg} }(sprintf("This shouldn't happen(Using an old library with code written for new module?).".
+                              "  Please report: [%s][%s][%s]\n",$group,$pin,$cfg));
        return 1;
      }
      if( !$self->{dbg} ) {
@@ -281,9 +290,9 @@ sub configure_pin {
        $result = "OK";
      }
      if( $result !~ /OK/ ) {
-        printf("Pin configuration failed: [%s][$cmd]\n", $result);
+       &{ $self->{msg} }(sprintf("Pin configuration failed: [%s][$cmd]\n", $result));
      } else {
-       printf("Pin %s%s configured as %s\n", $group, $pin, get_cap_name($cfg));
+       &{ $self->{msg} }(sprintf("Pin %s%s configured as %s\n", $group, $pin, get_cap_name($cfg)));
        $self->{pinconfigs}{$group}[$pin]{mode} = $cfg;
        $self->{pinconfigs}{$group}[$pin]{state} = "Unknown";
        return 0;
@@ -303,11 +312,11 @@ sub set_pin {
                 -1;
 
   if( $val_bit < 0 ) {
-     printf("Skipping pin %s%s: Invalid pin state was passed [%s] valid: {high,low}\n", $group, $pin, $value);
-  } elsif( !validate_pin($group,$pin) ){
+     &{ $self->{msg} }(sprintf("Skipping pin %s%s: Invalid pin state was passed [%s] valid: {high,low}\n", $group, $pin, $value));
+  } elsif( !validate_pin($self,$group,$pin) ){
   } elsif( $self->{pinconfigs}{$group}[$pin]{mode} != $caps{DigitalOut} ) {
-     printf("Skipping pin %s%s: Pin is not set to output[%s]\n",
-            $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode}));
+     &{ $self->{msg} }(sprintf("Skipping pin %s%s: Pin is not set to output[%s]\n",
+            $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode})));
   } else {
     my $cmd = sprintf("PO,%s,%s,%s", $group,$pin,$val_bit);
     if(!$self->{dbg}){
@@ -335,10 +344,10 @@ sub get_pin {
 
   my $result = "";
 
-  if( !validate_pin($group,$pin) ){
+  if( !validate_pin($self,$group,$pin) ){
   } elsif( $self->{pinconfigs}{$group}[$pin]{mode} != $caps{DigitalIn} ) {
-     printf("Skipping read of %s%s: Pin is not set to input[%s]\n",
-            $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode}));
+     &{ $self->{msg} }(sprintf("Skipping read of %s%s: Pin is not set to input[%s]\n",
+            $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode})));
   } else {
     my $cmd = sprintf("PI,%s,%s", $group, $pin);
     if(!$self->{dbg}){
@@ -368,10 +377,10 @@ sub get_analog {
   my $interval = shift; # us
   my %output;
 
-  if( !validate_pin($group,$pin) ){
+  if( !validate_pin($self,$group,$pin) ){
   } elsif( $self->{pinconfigs}{$group}[$pin]{mode} != $caps{AnalogIn} ) {
-    printf("Skipping read of %s%s: Pin is not set to Analog Input[%s]\n",
-           $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode}));
+    &{ $self->{msg} }(sprintf("Skipping read of %s%s: Pin is not set to Analog Input[%s]\n",
+           $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode})));
   } else {
     my $pinmask = analog_mask($group,$pin);
     my $cmd = sprintf("IA,%s,%s,%s", $pinmask, $interval, $samples);
@@ -407,10 +416,10 @@ sub hw_pwm {
   my $group = shift;
   my $pin = shift;
   my $duty_cycle = int(shift);
-  if( !validate_pin($group,$pin) ) {
+  if( !validate_pin($self,$group,$pin) ) {
   } elsif($self->{pinconfigs}{$group}[$pin]{mode} != $caps{HardPWMOut} ){
-    printf("Skipping setting PWM on %s%s: Pin is not set to Hardware PWM[%s]\n",
-           $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode}));
+    &{ $self->{msg} }(sprintf("Skipping setting PWM on %s%s: Pin is not set to Hardware PWM[%s]\n",
+           $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode})));
   } else {
     my $chan = $hwpwm_pins{$group}[$pin];
     my $cmd = sprintf("PM,%s,%s", $chan, $duty_cycle);
@@ -424,7 +433,7 @@ sub hw_pwm {
       $result = sprintf("%s\nOK\n", $cmd);
     }
     if($result !~ /OK/) {
-      printf("Setting HW Pwm on Pin failed: [%s]\n", $result);
+      &{ $self->{msg} }(sprintf("Setting HW Pwm on Pin failed: [%s]\n", $result));
     } else {
       return 0;
     }
