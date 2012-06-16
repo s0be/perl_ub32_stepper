@@ -408,8 +408,6 @@ sub hw_pwm {
   my $pin = shift;
   my $duty_cycle = int(shift);
   if( !validate_pin($group,$pin) ) {
-  } elsif(!$self->{pinconfigs}{$group} || !$self->{pinconfigs}{$group}[$pin]) {
-    printf("Pin has not been configured[%s%s]\n", $group, $pin);
   } elsif($self->{pinconfigs}{$group}[$pin]{mode} != $caps{HardPWMOut} ){
     printf("Skipping setting PWM on %s%s: Pin is not set to Hardware PWM[%s]\n",
            $group, $pin, get_cap_name($self->{pinconfigs}{$group}[$pin]{mode}));
