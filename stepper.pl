@@ -7,9 +7,10 @@ my $serialport = "/dev/ttyACM0";
 
 my $ubw=UBW32->new($serialport);
 $ubw->enable_debug(1);
-my $msg = sub { print @_ };
 
-$ubw->set_msg_handler($msg);
+my $msg;
+$ubw->set_msg_handler(sub{$msg = sprintf("UBW32: %s", @_);});
+
 my %motors = (
    pan => {
       # Wiring specific
@@ -257,4 +258,4 @@ sleep 2;
 #$ubw->configure_pin("D","2",$caps{DigitalOut});
 
 # G15 isn't setup, should fail gracefully.
-$ubw->set_pin("G","15","low");
+if(!$ubw->set_pin("G","15","low")){print $msg;};
