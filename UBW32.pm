@@ -16,37 +16,19 @@ $VERSION     = "0.00a";
 @EXPORT_OK   = qw(configure_pin set_pin print_pin enable_debug %caps);
 %EXPORT_TAGS = ( DEFAULT => [qw(&configure_pin &set_pin &print_pin &enable_debug)]);
 
-sub new {
-  my $proto = shift;
-  my $class = ref($proto) || $proto;
-  my $self  = {};
-  $self->{PORT} = shift;
-  $self->{pinconfigs} = {};
-  $self->{used_spwm_channels} = (1);
-  $self->{spwm_map} = {};
-  $self->{port} = config_serport($self->{PORT}, shift, shift, shift, shift);
-  $self->{dbg} = 0;
-  bless($self, $class);           # but see below
-  return $self;
-}
-
-sub enable_debug {
-  my $self = shift;
-  $self->{dbg} = shift;
-}
-
 our %caps = (
    NC		=> 0,
-   DigitalIn 	=> 1,
-   DigitalOut 	=> 2,
-   AnalogIn	=> 4,
-   AnalogOut	=> 8, # Does this exist?
-   SoftPWMIn	=> 16, #??
-   SoftPWMOut	=> 32, 
-   HardPWMIn	=> 64, #??
-   HardPWMOut	=> 128,
-   LED		=> 256,
-   BUTTON	=> 512,
+   DigitalIn 	=> 1 << 0,
+   DigitalOut 	=> 1 << 1,
+   AnalogIn	=> 1 << 2,
+   AnalogOut	=> 1 << 3, # Does this exist?
+   SoftPWMIn	=> 1 << 4, #??
+   SoftPWMOut	=> 1 << 5, 
+   HardPWMIn	=> 1 << 6, #??
+   HardPWMOut	=> 1 << 7,
+   LED		=> 1 << 8,
+   BUTTON	=> 1 << 9,
+   Unconfigured => 1 << 16,
 );
 
 my %fw_caps = (
@@ -100,6 +82,31 @@ my %hwpwm_pins = (
 # Pin:   0  1  2  3  4
   D => [ 1, 2 ,3, 4, 5],
 );
+
+sub new {
+  my $proto = shift;
+  my $class = ref($proto) || $proto;
+  my $self  = {};
+  $self->{PORT} = shift;
+  $self->{pinconfigs} = {};
+  foreach my $g ( qw(A B C D E F G)) {
+    for( my $p = 0; $p <= 15; $p++ ) {
+      $self->{pinconfigs}{$g}[$p]{mode} = $caps{Unconfigured};
+      $self->{pinconfigs}{$g}[$p]{state} = undef;
+    }
+  }
+  $self->{used_spwm_channels} = (1);
+  $self->{spwm_map} = {};
+  $self->{port} = config_serport($self->{PORT}, shift, shift, shift, shift);
+  $self->{dbg} = 0;
+  bless($self, $class);           # but see below
+  return $self;
+}
+
+sub enable_debug {
+  my $self = shift;
+  $self->{dbg} = shift;
+}
 
 sub config_serport {
   my $p = shift;
@@ -262,8 +269,7 @@ sub configure_pin {
        return 1;
      }
      if( !$self->{dbg} ) {
-       if($self->{pinconfigs}{$group} && $self->{pinconfigs}{$group}[$pin] && 
-          $self->{pinconfigs}{$group}[$pin]{mode} == $caps{HardPWMOut} ) {
+       if( $self->{pinconfigs}{$group}[$pin]{mode} == $caps{HardPWMOut} ) {
          # We must disable Hardware PWM before setting a new mode
          hw_pwm($self, $group, $pin, 0);
        }
