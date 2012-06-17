@@ -78,6 +78,11 @@ my %analog_pins = (
   B => [ 1 , 2 , 4 , 8 , 16 , 32 ],
 );
 
+my %pin_is_analog = (
+# Pin:   0   1   2   3   4    5
+  B => [ 0 , 0 , 0 , 0 , 0  , 0  ],
+);
+
 my %hwpwm_pins = (
 # Pin:   0  1  2  3  4
   D => [ 1, 2 ,3, 4, 5],
@@ -219,8 +224,20 @@ sub has_cap {
 sub analog_mask {
   my $group = shift;
   my $pin = shift;
+  my $mask = 0;
 
-  return $analog_pins{$group}[$pin];
+  if($group && $pin) {
+    $pin_is_analog{$group}[$pin] = 1;
+  }
+
+  foreach my $g (keys %analog_pins) {
+    for(my $p = 0; $analog_pins{$g}[$p]; $p++) {
+      $mask += $pin_is_analog{$g}[$p] * 
+                $analog_pins{$g}[$p];
+    }
+  }
+
+  return $mask;
 }
 
 sub find_softpwm_channel {
@@ -230,6 +247,37 @@ sub find_softpwm_channel {
       return $c;
     }
   }
+}
+
+sub unconfigure_pin {
+  my $self = shift;
+  my $group = shift;
+  my $pin = shift;
+  my $result = "";
+  my $cmd;
+
+  if( $self->{pinconfigs}{$group}[$pin]{mode} == $caps{HardPWMOut} ) {
+    # We must disable Hardware PWM before setting a new mode
+    return hw_pwm($self, $group, $pin, 0);
+  } elsif( $self->{pinconfigs}{$group}[$pin]{mode} == $caps{AnalogIn} ) {
+    if(! $self->{dbg} ){
+      $cmd = sprintf("CA,%s",analog_mask($group,$pin));  
+      $self->{port}->write("$cmd\n");
+      $self->{port}->write_drain;
+      usleep(10*1000);
+      $result = $self->{port}->read(length($cmd) + 4 + 2 + 4 + 1);
+    } else {
+      $result = sprintf("%s\n%s\r", $cmd, "OK");
+    }
+    if($result !~ /$cmd(?[\n\r]+)OK/) {
+      uprintf($self, "Failed to unconfigure pin");
+      return 0;
+    } else {
+      return 1;
+    }
+  }
+  # default to success for pins that don't need unconfigured
+  return 1;
 }
 
 sub configure_pin {
@@ -246,35 +294,36 @@ sub configure_pin {
     uprintf($self, "Backwards compatable setup detected, mapping %s to %s\n", $cfg, get_cap_name($compat_map));
     $cfg = $compat_map;
   }
-  
 
   if( !validate_pin($self, $group,$pin) ) {
   } elsif( !has_cap($group, $pin, $cfg) ) {
-     uprintf($self, "Skipping pin %s%s: Invalid state was requested [%s] valid: {%s}\n", 
+    uprintf($self, "Skipping pin %s%s: Invalid state was requested [%s] valid: {%s}\n", 
             $group, $pin, get_cap_name($cfg), get_caps($group, $pin));
   } elsif( cap_qty($cfg) > 1 ) {
-     uprintf($self, "Skipping pin %s%s: Cannot set multiple states simultaneously [%s] valid: {%s}",
+    uprintf($self, "Skipping pin %s%s: Cannot set multiple states simultaneously [%s] valid: {%s}",
             $group, $pin, get_cap_name($cfg), get_caps($group, $pin));
+  } elsif( !unconfigure_pin($self, $group, $pin) ) {
+    uprintf($self, "Skipping configuring pin %s%s: could not unconfigure it", $group, $pin);
   } else {
      my $cmd;
      if($cfg & $caps{DigitalIn}) {
-     	$cmd = sprintf("PD,%s,%s,%s" , $group,$pin,1);
+       $cmd = sprintf("PD,%s,%s,%s" , $group,$pin,1);
      } elsif( $cfg & $caps{DigitalOut} ) {
-     	$cmd = sprintf("PD,%s,%s,%s" , $group,$pin,0);
+       $cmd = sprintf("PD,%s,%s,%s" , $group,$pin,0);
      } elsif( $cfg & $caps{AnalogIn} ) {
-        $cmd = sprintf("CA,%s", analog_mask($group, $pin));
+       $cmd = sprintf("CA,%s", analog_mask($group, $pin));
      } elsif( $cfg & $caps{SoftPWMOut} ) {
-	my $free_channel = find_softpwm_channel($self);
-        $self->{used_spwm_channels}[$free_channel] = 1;
-        $self->{spwm_map}{$group}[$pin] = $free_channel;
-	# This assumes that 0 is not a valid spwm channel to configure, and 64 is the 
-	# maximum TOTAL number of spwm channels available.
-        my $count = $#{$self->{used_spwm_channels}} ;
-	if($count > 64) {
-          uprintf($self, "Too many Software PWM Channels Configured: [%s] max: [64]\n", $count);
-	  return 1;
-	}
-     	$cmd = sprintf("PC,4,%s\nPC,2,%s,%s,%s",$count,$free_channel,$group,$pin);
+       my $free_channel = find_softpwm_channel($self);
+       $self->{used_spwm_channels}[$free_channel] = 1;
+       $self->{spwm_map}{$group}[$pin] = $free_channel;
+       # This assumes that 0 is not a valid spwm channel to configure, and 64 is the 
+       # maximum TOTAL number of spwm channels available.
+       my $count = $#{$self->{used_spwm_channels}} ;
+       if($count > 64) {
+         uprintf($self, "Too many Software PWM Channels Configured: [%s] max: [64]\n", $count);
+         return 1;
+       }
+       $cmd = sprintf("PC,4,%s\nPC,2,%s,%s,%s",$count,$free_channel,$group,$pin);
      } elsif( $cfg & $caps{HardPWMOut} ) {
        #Stupidly assuming a pin must be set to Digital Output to PWM
        $cmd = sprintf("PD,%s,%s,%s" , $group,$pin,0);
@@ -285,11 +334,7 @@ sub configure_pin {
        return 1;
      }
      if( !$self->{dbg} ) {
-       if( $self->{pinconfigs}{$group}[$pin]{mode} == $caps{HardPWMOut} ) {
-         # We must disable Hardware PWM before setting a new mode
-         hw_pwm($self, $group, $pin, 0);
-       }
-       $self->{port}->write("$cmd\n");
+             $self->{port}->write("$cmd\n");
        $self->{port}->write_drain;
        usleep(10*1000);
        $result = $self->{port}->read(255);
@@ -335,10 +380,10 @@ sub set_pin {
       $result = sprintf("%s\nOK\n", $cmd);
     }
     if( $result !~ /OK/ ) {
-       printf("Pin state failed: [%s]\n", $result);
+      printf("Pin state failed: [%s]\n", $result);
     } else {
-       $self->{pinconfigs}{$group}[$pin]{state} = $value;
-       return 1;
+      $self->{pinconfigs}{$group}[$pin]{state} = $value;
+      return 1;
     }
   }
   return 0;
@@ -445,6 +490,14 @@ sub hw_pwm {
       return 1;
     }
   }
+  return 0;
+}
+
+sub sw_pwm {
+  my $self = shift;
+  my $group = shift;
+  my $pin = shift;
+
   return 0;
 }
 
